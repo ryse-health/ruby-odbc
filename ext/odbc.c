@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include "ruby.h"
+#include "ruby/thread.h"
 #ifdef HAVE_VERSION_H
 #include "version.h"
 #endif
@@ -175,6 +176,14 @@ SQLExecute_wrapper(void *data)
   return SQLExecute(args->StatementHandle);
 }
 
+void *
+SQLExecute_wrapper_with_gvl(void *data) {
+    // Call the original function
+    VALUE result = SQLExecute_wrapper(data);
+    // Cast the result to void* and return
+    return (void *)result;
+}
+
 void
 SQLExecute_unblock(void *data)
 {
@@ -187,6 +196,14 @@ SQLExecDirect_wrapper(void *data)
 {
 	SQLExecDirect_Args *args = (SQLExecDirect_Args *)data;
   return SQLExecDirect(args->StatementHandle, args->StatementText, args->TextLength);
+}
+
+void *
+SQLExecDirect_wrapper_with_gvl(void *data) {
+    // Call the original function
+    VALUE result = SQLExecDirect_wrapper(data);
+    // Cast the result to void* and return
+    return (void *)result;
 }
 
 void
@@ -979,7 +996,7 @@ free_stmt(STMT *q)
 static void
 start_gc()
 {
-    rb_funcall(rb_mGC, IDstart, 0, NULL);
+    rb_funcall(rb_mGC, IDstart, 0, 0);
 }
 
 static void
@@ -1246,7 +1263,7 @@ tracesql(SQLHENV henv, SQLHDBC hdbc, SQLHSTMT hstmt, SQLRETURN ret,
 		(long) henv, (long) hdbc, (long) hstmt);
 	trace_sql_ret(ret);
     }
-    
+
     return ret;
 }
 #endif
@@ -1669,7 +1686,7 @@ conf_dsn(int argc, VALUE *argv, VALUE self, int op)
     if (rb_obj_is_kind_of(attr, rb_cHash) == Qtrue) {
 	VALUE a, x;
 
-	a = rb_funcall(attr, IDkeys, 0, NULL);
+	a = rb_funcall(attr, IDkeys, 0, 0);
 	while ((x = rb_ary_shift(a)) != Qnil) {
 	    VALUE v = rb_hash_aref(attr, x);
 
@@ -2131,7 +2148,7 @@ dbc_connect(int argc, VALUE *argv, VALUE self)
 #endif
 	rb_raise(Cerror, "%s", msg);
     }
-    
+
     {
       SQLRETURN nRet;
 
@@ -2144,7 +2161,7 @@ dbc_connect(int argc, VALUE *argv, VALUE self)
       nRet = SQLSetConnectAttr(dbc, SQL_ATTR_LOGIN_TIMEOUT, (SQLPOINTER)nTimeout, SQL_IS_INTEGER);
       if (!SQL_SUCCEEDED(nRet)) fprintf(stderr, "Failed to set timeout to %d: error %d\n", nTimeout, nRet);
     }
-  
+
     if (!succeeded(SQL_NULL_HENV, dbc, SQL_NULL_HSTMT,
 		   SQLConnect(dbc, (SQLTCHAR *) sdsn, SQL_NTS,
 			      (SQLTCHAR *) suser,
@@ -2188,7 +2205,7 @@ dbc_drvconnect(VALUE self, VALUE drv)
 	VALUE d, a, x;
 
 	d = rb_str_new2("");
-	a = rb_funcall(rb_iv_get(drv, "@attrs"), IDkeys, 0, NULL);
+	a = rb_funcall(rb_iv_get(drv, "@attrs"), IDkeys, 0, 0);
 	while ((x = rb_ary_shift(a)) != Qnil) {
 	    VALUE v = rb_hash_aref(rb_iv_get(drv, "@attrs"), x);
 
@@ -4798,16 +4815,16 @@ date_init(int argc, VALUE *argv, VALUE self)
 	if (argc > 1) {
 	    rb_raise(rb_eArgError, "wrong # arguments");
 	}
-	d = rb_funcall(y, IDday, 0, NULL);
-	m = rb_funcall(y, IDmonth, 0, NULL);
-	y = rb_funcall(y, IDyear, 0, NULL);
+	d = rb_funcall(y, IDday, 0, 0);
+	m = rb_funcall(y, IDmonth, 0, 0);
+	y = rb_funcall(y, IDyear, 0, 0);
     } else if (rb_obj_is_kind_of(y, rb_cDate) == Qtrue) {
 	if (argc > 1) {
 	    rb_raise(rb_eArgError, "wrong # arguments");
 	}
-	d = rb_funcall(y, IDmday, 0, NULL);
-	m = rb_funcall(y, IDmonth, 0, NULL);
-	y = rb_funcall(y, IDyear, 0, NULL);
+	d = rb_funcall(y, IDmday, 0, 0);
+	m = rb_funcall(y, IDmonth, 0, 0);
+	y = rb_funcall(y, IDyear, 0, 0);
     } else if ((argc == 1) && (rb_obj_is_kind_of(y, rb_cString) == Qtrue)) {
 	if (date_load1(self, y, 0) != Qnil) {
 	    return self;
@@ -5033,9 +5050,9 @@ time_init(int argc, VALUE *argv, VALUE self)
 	if (argc > 1) {
 	    rb_raise(rb_eArgError, "wrong # arguments");
 	}
-	s = rb_funcall(h, IDsec, 0, NULL);
-	m = rb_funcall(h, IDmin, 0, NULL);
-	h = rb_funcall(h, IDhour, 0, NULL);
+	s = rb_funcall(h, IDsec, 0, 0);
+	m = rb_funcall(h, IDmin, 0, 0);
+	h = rb_funcall(h, IDhour, 0, 0);
     } else if ((argc == 1) && (rb_obj_is_kind_of(h, rb_cString) == Qtrue)) {
 	if (time_load1(self, h, 0) != Qnil) {
 	    return self;
@@ -5273,13 +5290,13 @@ timestamp_init(int argc, VALUE *argv, VALUE self)
 	if (argc > 1) {
 	    rb_raise(rb_eArgError, "wrong # arguments");
 	}
-	f  = rb_funcall(y, IDusec, 0, NULL);
-	ss = rb_funcall(y, IDsec, 0, NULL);
-	mm = rb_funcall(y, IDmin, 0, NULL);
-	hh = rb_funcall(y, IDhour, 0, NULL);
-	d  = rb_funcall(y, IDday, 0, NULL);
-	m  = rb_funcall(y, IDmonth, 0, NULL);
-	y  = rb_funcall(y, IDyear, 0, NULL);
+	f  = rb_funcall(y, IDusec, 0, 0);
+	ss = rb_funcall(y, IDsec, 0, 0);
+	mm = rb_funcall(y, IDmin, 0, 0);
+	hh = rb_funcall(y, IDhour, 0, 0);
+	d  = rb_funcall(y, IDday, 0, 0);
+	m  = rb_funcall(y, IDmonth, 0, 0);
+	y  = rb_funcall(y, IDyear, 0, 0);
 	f = INT2NUM(NUM2INT(f) * 1000);
     } else if (rb_obj_is_kind_of(y, rb_cDate) == Qtrue) {
 	if (argc > 1) {
@@ -5289,9 +5306,9 @@ timestamp_init(int argc, VALUE *argv, VALUE self)
 	ss = INT2FIX(0);
 	mm = INT2FIX(0);
 	hh = INT2FIX(0);
-	d  = rb_funcall(y, IDmday, 0, NULL);
-	m  = rb_funcall(y, IDmonth, 0, NULL);
-	y  = rb_funcall(y, IDyear, 0, NULL);
+	d  = rb_funcall(y, IDmday, 0, 0);
+	m  = rb_funcall(y, IDmonth, 0, 0);
+	y  = rb_funcall(y, IDyear, 0, 0);
     } else if ((argc == 1) && (rb_obj_is_kind_of(y, rb_cString) == Qtrue)) {
 	if (timestamp_load1(self, y, 0) != Qnil) {
 	    return self;
@@ -5766,13 +5783,13 @@ stmt_param_output_value(int argc, VALUE *argv, VALUE self)
 
 		time = (TIME_STRUCT *) q->paraminfo[vnum].outbuf;
 		frac = rb_float_new(0.0);
-		now = rb_funcall(rb_cTime, IDnow, 0, NULL);
+		now = rb_funcall(rb_cTime, IDnow, 0, 0);
 		v = rb_funcall(rb_cTime,
 			       (q->dbcp->gmtime == Qtrue) ? IDutc : IDlocal,
 			       7,
-			       rb_funcall(now, IDyear, 0, NULL),
-			       rb_funcall(now, IDmonth, 0, NULL),
-			       rb_funcall(now, IDday, 0, NULL),
+			       rb_funcall(now, IDyear, 0, 0),
+			       rb_funcall(now, IDmonth, 0, 0),
+			       rb_funcall(now, IDday, 0, 0),
 			       INT2NUM(time->hour),
 			       INT2NUM(time->minute),
 			       INT2NUM(time->second),
@@ -6423,14 +6440,14 @@ do_fetch(STMT *q, int mode)
 
 			time = (TIME_STRUCT *) valp;
 			frac = rb_float_new(0.0);
-			now = rb_funcall(rb_cTime, IDnow, 0, NULL);
+			now = rb_funcall(rb_cTime, IDnow, 0, 0);
 			v = rb_funcall(rb_cTime,
 				       (q->dbcp->gmtime == Qtrue) ?
 				       IDutc : IDlocal,
 				       7,
-				       rb_funcall(now, IDyear, 0, NULL),
-				       rb_funcall(now, IDmonth, 0, NULL),
-				       rb_funcall(now, IDday, 0, NULL),
+				       rb_funcall(now, IDyear, 0, 0),
+				       rb_funcall(now, IDmonth, 0, 0),
+				       rb_funcall(now, IDday, 0, 0),
 				       INT2NUM(time->hour),
 				       INT2NUM(time->minute),
 				       INT2NUM(time->second),
@@ -7097,7 +7114,7 @@ stmt_prep_int(int argc, VALUE *argv, VALUE self, int mode)
     args.StatementHandle = hstmt;
     args.StatementText = ssql;
     args.TextLength = SQL_NTS;
-    ret = (SQLRETURN)rb_thread_call_without_gvl(SQLExecDirect_wrapper, &args, SQLExecDirect_unblock, &args);
+    ret = (SQLRETURN)rb_thread_call_without_gvl(SQLExecDirect_wrapper_with_gvl, &args, SQLExecDirect_unblock, &args);
 
 	if (!succeeded_nodata(SQL_NULL_HENV, SQL_NULL_HDBC, hstmt, ret, &msg, "SQLExecDirect('%s')", csql)) {
 	    goto sqlerr;
@@ -7289,9 +7306,9 @@ bind_one_param(int pnum, VALUE arg, STMT *q, char **msgp, int *outpp)
 		ctype = SQL_C_TIME;
 		time = (TIME_STRUCT *) valp;
 		memset(time, 0, sizeof (TIME_STRUCT));
-		time->hour   = rb_funcall(arg, IDhour, 0, NULL);
-		time->minute = rb_funcall(arg, IDmin, 0, NULL);
-		time->second = rb_funcall(arg, IDsec, 0, NULL);
+		time->hour   = rb_funcall(arg, IDhour, 0, 0);
+		time->minute = rb_funcall(arg, IDmin, 0, 0);
+		time->second = rb_funcall(arg, IDsec, 0, 0);
 		rlen = 1;
 		vlen = sizeof (TIME_STRUCT);
 	    } else if (q->paraminfo[pnum].type == SQL_DATE) {
@@ -7300,9 +7317,9 @@ bind_one_param(int pnum, VALUE arg, STMT *q, char **msgp, int *outpp)
 		ctype = SQL_C_DATE;
 		date = (DATE_STRUCT *) valp;
 		memset(date, 0, sizeof (DATE_STRUCT));
-		date->year  = rb_funcall(arg, IDyear, 0, NULL);
-		date->month = rb_funcall(arg, IDmonth, 0, NULL);
-		date->day   = rb_funcall(arg, IDday, 0, NULL);
+		date->year  = rb_funcall(arg, IDyear, 0, 0);
+		date->month = rb_funcall(arg, IDmonth, 0, 0);
+		date->day   = rb_funcall(arg, IDday, 0, 0);
 		rlen = 1;
 		vlen = sizeof (TIMESTAMP_STRUCT);
 	    } else {
@@ -7311,16 +7328,16 @@ bind_one_param(int pnum, VALUE arg, STMT *q, char **msgp, int *outpp)
 		ctype = SQL_C_TIMESTAMP;
 		ts = (TIMESTAMP_STRUCT *) valp;
 		memset(ts, 0, sizeof (TIMESTAMP_STRUCT));
-		ts->year     = rb_funcall(arg, IDyear, 0, NULL);
-		ts->month    = rb_funcall(arg, IDmonth, 0, NULL);
-		ts->day      = rb_funcall(arg, IDday, 0, NULL);
-		ts->hour     = rb_funcall(arg, IDhour, 0, NULL);
-		ts->minute   = rb_funcall(arg, IDmin, 0, NULL);
-		ts->second   = rb_funcall(arg, IDsec, 0, NULL);
+		ts->year     = rb_funcall(arg, IDyear, 0, 0);
+		ts->month    = rb_funcall(arg, IDmonth, 0, 0);
+		ts->day      = rb_funcall(arg, IDday, 0, 0);
+		ts->hour     = rb_funcall(arg, IDhour, 0, 0);
+		ts->minute   = rb_funcall(arg, IDmin, 0, 0);
+		ts->second   = rb_funcall(arg, IDsec, 0, 0);
 #ifdef TIME_USE_USEC
-		ts->fraction = rb_funcall(arg, IDusec, 0, NULL) * 1000;
+		ts->fraction = rb_funcall(arg, IDusec, 0, 0) * 1000;
 #else
-		ts->fraction = rb_funcall(arg, IDnsec, 0, NULL);
+		ts->fraction = rb_funcall(arg, IDnsec, 0, 0);
 #endif
 		rlen = 1;
 		vlen = sizeof (TIMESTAMP_STRUCT);
@@ -7333,9 +7350,9 @@ bind_one_param(int pnum, VALUE arg, STMT *q, char **msgp, int *outpp)
 	    ctype = SQL_C_DATE;
 	    date = (DATE_STRUCT *) valp;
 	    memset(date, 0, sizeof (DATE_STRUCT));
-	    date->year  = rb_funcall(arg, IDyear, 0, NULL);
-	    date->month = rb_funcall(arg, IDmonth, 0, NULL);
-	    date->day   = rb_funcall(arg, IDmday, 0, NULL);
+	    date->year  = rb_funcall(arg, IDyear, 0, 0);
+	    date->month = rb_funcall(arg, IDmonth, 0, 0);
+	    date->day   = rb_funcall(arg, IDmday, 0, 0);
 	    rlen = 1;
 	    vlen = sizeof (DATE_STRUCT);
 	    break;
@@ -7546,7 +7563,7 @@ stmt_exec_int(int argc, VALUE *argv, VALUE self, int mode)
     }
 
     args.StatementHandle = q->hstmt;
-    ret = (SQLRETURN)rb_thread_call_without_gvl(SQLExecute_wrapper, &args, SQLExecute_unblock, &args);
+    ret = (SQLRETURN)rb_thread_call_without_gvl(SQLExecute_wrapper_with_gvl, &args, SQLExecute_unblock, &args);
 
     if (!succeeded_nodata(SQL_NULL_HENV, SQL_NULL_HDBC, q->hstmt, ret, &msg, "SQLExecute")) {
 error:
@@ -7862,7 +7879,7 @@ again:
 		rb_raise(rb_eTypeError, "expecting ODBC::Date");
 	    }
 	} else {
-	    VALUE now = rb_funcall(rb_cTime, IDnow, 0, NULL);
+	    VALUE now = rb_funcall(rb_cTime, IDnow, 0, 0);
 
 	    y = rb_funcall(rb_cTime, IDyear, 1, now);
 	    m = rb_funcall(rb_cTime, IDmonth, 1, now);
