@@ -1,5 +1,10 @@
 ODBC binding for Ruby
 ---------------------
+Thu Jun 27 2024 version 0.103.cv release <pandeyam@vmware.com>
+	* Argument data type fix to support Ruby 3.3 by replacing NULL with 0 in method rb_funcall
+	* Include ruby/thread.h to implicitly declare rb_thread_call_without_gvl
+	* Cast first argument of rb_thread_call_without_gvl to void * data type
+
 Mon Aug 21 2023 version 0.102.cv release <grajwade@vmware.com>
 	* Syntax changes to support Ruby 3.2 by using native "rb_str_new" instead of "rb_tainted_str_new"
           Remove tained usage (thanks @vhermecz)
