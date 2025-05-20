@@ -8589,7 +8589,7 @@ Init_odbc()
 
     if( rb_enc && rb_external_encoding && rb_enc == rb_external_encoding )
     {
-      printf("Ruby-ODBC: Force Encoding ruby result strings to UTF-8\n");
+      /* printf("Ruby-ODBC: Force Encoding ruby result strings to UTF-8\n"); */
       rb_encoding_is_utf8 = 1;
     }
 #endif
